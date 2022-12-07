@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.17;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./TokenPaymentSplitter.sol";
+
 contract DepositContract is Initializable, OwnableUpgradeable, TokenPaymentSplitter {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
@@ -18,6 +19,7 @@ contract DepositContract is Initializable, OwnableUpgradeable, TokenPaymentSplit
         for (uint256 i = 0; i < _payees.length; i++) {
             _addPayee(_payees[i], _shares[i]);
         }
+        require(_paymentToken != address(0), "ERC20: zero address");
         paymentToken = _paymentToken;
         releaseTime = _releaseTime;
         vestingMonth = _vestingMonth;
@@ -33,8 +35,8 @@ contract DepositContract is Initializable, OwnableUpgradeable, TokenPaymentSplit
 
     // Owner権限により指定アドレスを変更する
     function changeAddress(address oldAccount, address newAccount) external onlyOwner {
-        require(accountExists[oldAccount] == true, "Account does not exist");
-        require(accountExists[newAccount] == false, "Account already exists"); //既に登録済みのアドレスを指定できない（以下の処理が無効となってしまうため）
+        require(accountExists[oldAccount], "Account does not exist");
+        require(!accountExists[newAccount], "Account already exists"); //既に登録済みのアドレスを指定できない（以下の処理が無効となってしまうため）
         uint addressEntityIndex = addressesEntityIndex[oldAccount];
         // アップデート処理
         _payees[addressEntityIndex] = newAccount;
@@ -48,6 +50,3 @@ contract DepositContract is Initializable, OwnableUpgradeable, TokenPaymentSplit
         accountExists[oldAccount] = false;
     }
 }
-
-
-
