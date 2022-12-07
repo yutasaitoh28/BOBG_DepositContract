@@ -59,7 +59,7 @@ abstract contract TokenPaymentSplitter {
         if (vestingDaysElapsed > vestingTotalDays) {
             claimable =  totalAsset - _tokenReleased[account]; //ベスティング期間が終わった後にはclaimable amountが増加しない
         } else {
-            claimable =  (totalAsset * vestingDaysElapsed) / (365 * vestingMonth / 12)  - _tokenReleased[account];
+            claimable =  (totalAsset * vestingDaysElapsed) / vestingTotalDays - _tokenReleased[account];
         }
         return claimable;
     }
@@ -88,7 +88,7 @@ abstract contract TokenPaymentSplitter {
         if (vestingDaysElapsed > vestingTotalDays) {
             claimable =  totalAsset - _tokenReleased[account]; //ベスティング期間が終わった後にはclaimable amountが増加しない
         } else {
-            claimable =  (totalAsset * vestingDaysElapsed) / (365 * vestingMonth / 12)  - _tokenReleased[account];
+            claimable =  (totalAsset * vestingDaysElapsed) / vestingTotalDays - _tokenReleased[account];
         }
         require(claimable != 0, "TokenPaymentSplitter: account is not due payment"); //claim可能なトークン量が現時点でゼロ
         require(claimable >= amount, "More than claimable amount"); //指定amountが現在claim可能なトークン量を超えている
