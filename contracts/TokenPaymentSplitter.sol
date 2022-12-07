@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.17;
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+
 abstract contract TokenPaymentSplitter {
     event PayeeAdded(address account, uint256 shares);
     event PaymentReleased(address to, uint256 amount);
@@ -16,6 +17,15 @@ abstract contract TokenPaymentSplitter {
     mapping(address => uint) public addressesEntityIndex;
     mapping(address => uint256) internal _shares;
     mapping(address => uint256) internal _tokenReleased;
+    bool internal locked;
+
+    // Re-Entry対策
+    modifier noReentrant() {
+        require(!locked, "No re-entrancy");
+        locked = true;
+        _;
+        locked = false;
+    }
 
     // 初期化の際に使用する（引き出し可能なアドレスと分配率を指定する）
     function _addPayee(address account, uint256 shares_) internal {
@@ -43,14 +53,13 @@ abstract contract TokenPaymentSplitter {
         require(block.timestamp >= releaseTime, "Still in lock-up period"); //ロックアップ期間中に引き出すことはできない
         uint256 tokenTotalReceived = IERC20Upgradeable(paymentToken).balanceOf(address(this)) + _totalTokenReleased; //Deposit Contractに送られた総トークン量
         uint256 totalAsset = (tokenTotalReceived * _shares[account]) / _totalShares; //アドレスに割り当てられた総トークン量
-        uint256 paymentDaily = totalAsset / (365 * vestingMonth / 12); //一日あたりのリリース量
         uint256 vestingTotalDays = 365 * vestingMonth / 12; //ベスティングの総日数
         uint256 vestingDaysElapsed = (block.timestamp - releaseTime) / 60 / 60 / 24; //ベスティングの経過日数
         uint256 claimable; //claim可能なトークン量
         if (vestingDaysElapsed > vestingTotalDays) {
             claimable =  totalAsset - _tokenReleased[account]; //ベスティング期間が終わった後にはclaimable amountが増加しない
         } else {
-            claimable = paymentDaily * vestingDaysElapsed - _tokenReleased[account];
+            claimable =  (totalAsset * vestingDaysElapsed) / (365 * vestingMonth / 12)  - _tokenReleased[account];
         }
         return claimable;
     }
@@ -64,7 +73,7 @@ abstract contract TokenPaymentSplitter {
     }
 
     // 引き出し量を指定してClaimをする
-    function claim(uint256 amount) public virtual {
+    function claim(uint256 amount) public virtual noReentrant {
         address account = msg.sender;
         require(block.timestamp >= releaseTime, "Still in lock-up period"); //ロックアップ期間中に引き出すことはできない
         require(
@@ -73,14 +82,13 @@ abstract contract TokenPaymentSplitter {
         uint256 tokenTotalReceived = IERC20Upgradeable(paymentToken).balanceOf(address(this)) + _totalTokenReleased; //Deposit Contractに送られた総トークン量
         uint256 totalAsset = (tokenTotalReceived * _shares[account]) / _totalShares; //アドレスに割り当てられた総トークン量
         require(totalAsset >= amount, "More than total assets"); //アドレスに割り当てられた総トークン量より多くのamountをclaimできない
-        uint256 paymentDaily = totalAsset / (365 * vestingMonth / 12); //一日あたりのリリース量
         uint256 vestingTotalDays = 365 * vestingMonth / 12; //ベスティングの総日数
         uint256 vestingDaysElapsed = (block.timestamp - releaseTime) / 60 / 60 / 24; //ベスティングの経過日数
         uint256 claimable; //claim可能なトークン量
         if (vestingDaysElapsed > vestingTotalDays) {
             claimable =  totalAsset - _tokenReleased[account]; //ベスティング期間が終わった後にはclaimable amountが増加しない
         } else {
-            claimable = paymentDaily * vestingDaysElapsed - _tokenReleased[account];
+            claimable =  (totalAsset * vestingDaysElapsed) / (365 * vestingMonth / 12)  - _tokenReleased[account];
         }
         require(claimable != 0, "TokenPaymentSplitter: account is not due payment"); //claim可能なトークン量が現時点でゼロ
         require(claimable >= amount, "More than claimable amount"); //指定amountが現在claim可能なトークン量を超えている
